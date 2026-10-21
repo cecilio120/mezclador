@@ -235,7 +235,7 @@ class BaseMixer:
         with self.lock:
             self.cfg["stream_mode"] = bool(value)
             self.save_config()
-            self.rebuild()
+            self.update_mode()
 
     def set_default_channel(self, chan):
         if chan in CHANNELS:
@@ -248,6 +248,7 @@ class BaseMixer:
     def apply_all(self): ...
     def route_all(self, force=False): ...
     def rebuild(self): ...
+    def update_mode(self): self.rebuild()
     def state(self): ...
     def start(self): ...
     def stop(self): ...
@@ -411,6 +412,10 @@ class PipeWireMixer(BaseMixer):
             self.refresh_cache()
             self.apply_all()
             self.route_all()
+
+    def update_mode(self):
+        # Solo añade o quita las conexiones del stream; las de los audífonos no se tocan (sin chasquidos)
+        self.ensure_topology()
 
     def rebuild(self):
         for key in [k for k in self.modules if k.startswith("loop:")]:
