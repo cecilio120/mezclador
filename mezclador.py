@@ -594,6 +594,8 @@ class PipeWireMixer(BaseMixer):
                 if (props.get("application.name") or "").startswith(LOOP_TAG):
                     continue
                 key, name, _ = app_key(props)
+                if key == "capturadora":      # graba la tarjeta de captura, no el micrófono
+                    continue
                 if ("mic", key) in seen or props.get("media.class") == "Stream/Input/Video":
                     continue
                 seen.add(("mic", key))
