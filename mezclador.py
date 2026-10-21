@@ -387,12 +387,12 @@ class PipeWireMixer(BaseMixer):
     def pick_defaults(self):
         changed = False
         hw = [dev_name(s) for s in self.hw_sinks()]
-        if self.cfg["output"] not in hw and hw:
+        if not self.cfg["output"] and hw:
             d = self.default_sink()
             self.cfg["output"] = d if d in hw else hw[0]
             changed = True
         mic_names = [dev_name(s) for s in self.mics()]
-        if self.cfg["mic"] not in mic_names and mic_names:
+        if not self.cfg["mic"] and mic_names:
             d = self.default_source()
             self.cfg["mic"] = d if d in mic_names else mic_names[0]
             changed = True
