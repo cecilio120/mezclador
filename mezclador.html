@@ -1,0 +1,438 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mezclador</title>
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #141311; --panel: #1d1c19; --panel-2: #262420; --line: #34312b; --track: #0d0c0b;
+    --text: #f1ede4; --muted: #9b9488;
+    --master: #ece6d6; --game: #c6f432; --chat: #ffb547; --media: #ff6b5a;
+    --aux: #7ee0d6; --mic: #f28bd0;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
+    font: 14px/1.35 "Nunito", "Quicksand", "Noto Sans", system-ui, sans-serif; user-select: none; }
+  body { padding: 18px 22px; overflow: auto;
+    background: radial-gradient(1200px 500px at 0% 0%, #1f1d18 0%, transparent 60%), var(--bg); }
+  .banner { margin: 0 0 12px; padding: 10px 16px; border-radius: 14px; background: #3b1d17;
+    color: #ffc9bd; display: none; border: 1px solid #6b2c22; }
+  .banner.show { display: block; }
+
+  /* Barra superior */
+  .topbar { display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    margin: 0 0 16px; min-width: 900px; }
+  .brand { display: flex; align-items: baseline; gap: 10px; }
+  .brand b { font-size: 26px; font-weight: 900; letter-spacing: -.5px; }
+  .brand b i { font-style: normal; color: var(--game); }
+  .brand span { color: var(--muted); font-size: 13px; }
+  .switch { display: inline-flex; align-items: center; gap: 4px; background: var(--panel);
+    border: 1px solid var(--line); border-radius: 14px; padding: 4px; cursor: pointer;
+    color: var(--muted); font: inherit; font-weight: 800; font-size: 13px; }
+  .switch .knobw { display: none; }
+  .switch .seg { padding: 7px 14px; border-radius: 10px; display: inline-flex; align-items: center; gap: 6px; }
+  .switch .seg svg { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 2;
+    stroke-linecap: round; stroke-linejoin: round; }
+  .switch[aria-checked=false] .seg.a, .switch[aria-checked=true] .seg.b {
+    background: var(--text); color: var(--bg); }
+  .switch:focus-visible { outline: 2px solid var(--game); outline-offset: 2px; }
+  #smodel { display: none; }
+
+  /* Canales en filas */
+  .mixer { display: flex; flex-direction: column; gap: 10px; min-width: 900px; }
+  .col { background: var(--panel); border: 1px solid var(--line); border-radius: 18px;
+    display: grid; grid-template-columns: 190px minmax(280px, 1.3fr) minmax(220px, 1fr);
+    grid-template-areas: "head faders apps" "foot faders apps"; grid-template-rows: auto 1fr;
+    column-gap: 18px; padding: 14px 18px; position: relative; overflow: hidden; }
+  .col::before { content: ""; position: absolute; left: 0; top: 14px; bottom: 14px; width: 4px;
+    border-radius: 0 4px 4px 0; background: var(--c); }
+  .head { grid-area: head; display: flex; align-items: center; gap: 10px; font-weight: 900;
+    font-size: 17px; color: var(--text); }
+  .head svg { width: 34px; height: 34px; padding: 7px; border-radius: 11px; background: var(--c);
+    stroke: var(--bg); fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+  .faders { grid-area: faders; display: flex; flex-direction: column; justify-content: center; gap: 6px; }
+  .fader { display: grid; grid-template-columns: 22px 92px 1fr 52px 36px; align-items: center; gap: 8px; }
+  .fader .ico { width: 18px; height: 18px; stroke: var(--muted); fill: none; stroke-width: 1.8;
+    stroke-linecap: round; stroke-linejoin: round; }
+  .fader .lbl { font-size: 12px; color: var(--muted); font-weight: 700; }
+  .val { font-variant-numeric: tabular-nums; font-size: 13px; font-weight: 800; text-align: right; }
+
+  /* Sliders */
+  .sl { position: relative; cursor: pointer; touch-action: none; outline: none; }
+  .sl .trk { position: absolute; background: var(--track); border-radius: 99px; overflow: hidden;
+    box-shadow: inset 0 0 0 1px #2a2823; }
+  .sl .fill { position: absolute; background: var(--c); border-radius: 99px; }
+  .sl .knob { position: absolute; background: var(--bg); border: 3px solid var(--c); border-radius: 50%;
+    box-shadow: 0 0 0 4px #0006; }
+  .sl.vert { width: 28px; height: 200px; }
+  .sl.vert .trk { left: 10px; width: 8px; top: 8px; bottom: 8px; }
+  .sl.vert .fill { left: 0; right: 0; bottom: 0; }
+  .sl.vert .knob { left: 5px; width: 18px; height: 18px; transform: translateY(50%); }
+  .sl.horiz { height: 26px; flex: 1; }
+  .sl.horiz .trk { top: 9px; height: 8px; left: 8px; right: 8px; }
+  .sl.horiz .fill { top: 0; bottom: 0; left: 0; }
+  .sl.horiz .knob { top: 4px; width: 18px; height: 18px; transform: translateX(-50%); }
+  .sl.split .fill { display: none; }
+  .sl.split .trk { background: linear-gradient(90deg, var(--game), #3a382f 50%, var(--chat)); opacity: .55; }
+  .sl:focus-visible .knob { box-shadow: 0 0 0 4px var(--c); }
+  .muted .sl .fill { background: #4b473f; }
+  .muted .sl .knob { border-color: #4b473f; }
+
+  .mute { width: 34px; height: 30px; border-radius: 10px; border: 0; background: var(--panel-2);
+    color: var(--muted); cursor: pointer; display: grid; place-items: center; }
+  .mute:hover { color: var(--text); }
+  .mute svg { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 2;
+    stroke-linecap: round; stroke-linejoin: round; }
+  .mute.on { background: #ff5a4a; color: #1a0d0b; }
+  .mute:focus-visible, select:focus-visible { outline: 2px solid var(--c, #c6f432); outline-offset: 2px; }
+  .muted .val { color: var(--muted); text-decoration: line-through; }
+
+  .apps-title { grid-area: apps; align-self: start; color: var(--muted); font-weight: 800; font-size: 11px;
+    text-transform: uppercase; letter-spacing: 1px; }
+  .apps { grid-area: apps; margin-top: 20px; min-height: 56px; background: var(--track);
+    border-radius: 12px; padding: 8px; display: flex; flex-wrap: wrap; align-content: flex-start;
+    gap: 6px; border: 1.5px solid transparent; transition: border-color .15s, background .15s; }
+  .apps.over { border-color: var(--c); background: #1a1916; }
+  .tag { display: inline-flex; align-items: center; gap: 6px; padding: 4px 11px 4px 8px; border-radius: 99px;
+    background: transparent; border: 1.5px solid var(--c); color: var(--text); font-weight: 700;
+    font-size: 12px; cursor: grab; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tag svg { width: 13px; height: 13px; flex: none; stroke: var(--c); fill: none; stroke-width: 2.2; }
+  .tag.static { cursor: default; }
+  .empty { color: #625d54; font-size: 12px; padding: 4px; font-style: italic; }
+
+  .foot { grid-area: foot; padding-top: 10px; display: flex; flex-direction: column; gap: 6px; }
+  .foot label, .foot .lab { font-size: 11px; color: var(--muted); font-weight: 800; display: flex;
+    align-items: center; gap: 6px; }
+  select { width: 100%; -webkit-appearance: none; appearance: none;
+    background-color: var(--panel-2); color: var(--text); border: 0;
+    border-radius: 10px; padding: 7px 28px 7px 10px; font: inherit; font-size: 12px; cursor: pointer;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5l5 5 5-5' fill='none' stroke='%23f1ede4' stroke-width='1.8' stroke-linecap='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat; background-position: right 10px center;
+    text-overflow: ellipsis; white-space: nowrap; overflow: hidden; }
+  select:hover { background-color: #2f2c27; }
+  select option { background: #1d1c19; color: var(--text); }
+  .radio { display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 11px;
+    color: var(--muted); font-weight: 800; background: none; border: 0; padding: 0; text-align: left; font-family: inherit; }
+  .radio i { width: 26px; height: 14px; border-radius: 99px; background: var(--panel-2); flex: none; position: relative; }
+  .radio i::after { content: ""; position: absolute; top: 2px; left: 2px; width: 10px; height: 10px;
+    border-radius: 50%; background: #625d54; transition: transform .15s; }
+  .radio[aria-checked=true] i { background: var(--c); }
+  .radio[aria-checked=true] i::after { background: var(--bg); transform: translateX(12px); }
+  .radio[aria-checked=true] { color: var(--text); }
+
+  /* Balance juego / chat */
+  .chatmix { background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: 14px 22px; }
+  .chatmix h3 { margin: 0 0 8px; font-size: 13px; font-weight: 900; color: var(--muted);
+    text-transform: uppercase; letter-spacing: 1px; }
+  .cm-row { display: flex; align-items: center; gap: 12px; }
+  .cm-row > svg { width: 24px; height: 24px; fill: none; stroke-width: 2; stroke-linecap: round;
+    stroke-linejoin: round; flex: none; }
+  .cm-vals { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted);
+    margin-top: 4px; font-variant-numeric: tabular-nums; font-weight: 700; padding: 0 36px; }
+  .hint { color: var(--muted); font-size: 12px; padding: 2px 6px; }
+  .hint b { color: var(--text); }
+  body.normal .fader[data-side=st], body.normal .hint { display: none; }
+  .demo { position: fixed; right: 18px; bottom: 10px; font-size: 11px; color: var(--muted);
+    background: var(--panel); padding: 4px 10px; border-radius: 99px; }
+  .demo:empty { display: none; }
+</style>
+</head>
+<body>
+<div class="banner" id="banner" role="alert"></div>
+<div class="topbar">
+  <div class="brand"><b>Mezcla<i>.</i></b><span>tu audio, por separado</span></div>
+  <button class="switch" id="smode" role="switch" aria-checked="false" title="Mostrar la mezcla para OBS">
+    <span class="knobw"></span><span class="seg a"><svg><use href="#i-hp"/></svg>Normal</span><span class="seg b"><svg><use href="#i-st"/></svg>Stream</span><span id="smodel">Modo normal</span>
+  </button>
+</div>
+<div class="mixer" id="mixer"></div>
+<div class="demo" id="demo"></div>
+
+<svg width="0" height="0" style="position:absolute">
+  <defs>
+    <symbol id="i-master" viewBox="0 0 24 24"><path d="M5 3v18M12 3v18M19 3v18M3 8h4M10 15h4M17 10h4"/></symbol>
+    <symbol id="i-game" viewBox="0 0 24 24"><path d="M6 8h12a4 4 0 0 1 4 4v1a4 4 0 0 1-7 2.6l-.6-.6H9.6l-.6.6A4 4 0 0 1 2 13v-1a4 4 0 0 1 4-4z"/><path d="M7 11v3M5.5 12.5h3"/><circle cx="16" cy="11.5" r=".6"/><circle cx="18" cy="13.5" r=".6"/></symbol>
+    <symbol id="i-chat" viewBox="0 0 24 24"><path d="M3 5h12v9H8l-4 3v-3H3z"/><path d="M15 9h6v8h-1v3l-3-3h-6v-3"/><path d="M6.5 9.5h5"/></symbol>
+    <symbol id="i-media" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="1.5"/><path d="M10 9.5v5l4.5-2.5z"/></symbol>
+    <symbol id="i-aux" viewBox="0 0 24 24"><path d="M14 4l6 6-9 9H5v-6z"/><path d="M4 20l3-3M12 6l6 6"/></symbol>
+    <symbol id="i-mic" viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3M9 21h6"/></symbol>
+    <symbol id="i-hp" viewBox="0 0 24 24"><path d="M4 15v-3a8 8 0 0 1 16 0v3"/><rect x="3" y="14" width="4" height="6" rx="1.5"/><rect x="17" y="14" width="4" height="6" rx="1.5"/></symbol>
+    <symbol id="i-st" viewBox="0 0 24 24"><circle cx="12" cy="12" r="2.2"/><path d="M8.5 8.5a5 5 0 0 0 0 7M15.5 8.5a5 5 0 0 1 0 7M5.6 5.6a9 9 0 0 0 0 12.8M18.4 5.6a9 9 0 0 1 0 12.8"/></symbol>
+    <symbol id="i-spk" viewBox="0 0 24 24"><path d="M4 9h4l5-4v14l-5-4H4z"/><path d="M16.5 9a4 4 0 0 1 0 6"/></symbol>
+    <symbol id="i-off" viewBox="0 0 24 24"><path d="M4 9h4l5-4v14l-5-4H4z"/><path d="M16 9l5 6M21 9l-5 6"/></symbol>
+  </defs>
+</svg>
+
+<script>
+const COLS = [
+  { id: "master", name: "General" }, { id: "game", name: "Juego" }, { id: "chat", name: "Chat" },
+  { id: "media", name: "Multimedia" }, { id: "aux", name: "Extra" }, { id: "mic", name: "Micrófono" },
+];
+const SIDE_LABEL = { hp: "Audífonos", st: "Stream" };
+const SIDE_LABEL_MIC = { hp: "Escucharme", st: "Stream" };
+const ROUTABLE = ["game", "chat", "media", "aux"];
+let S = null;
+let dragging = 0;                 // sliders siendo arrastrados ahora mismo
+const $ = (s, el = document) => el.querySelector(s);
+const svg = (id) => `<svg><use href="#i-${id}"/></svg>`;
+const esc = (s) => String(s).replace(/[&<>"']/g, ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
+
+async function post(path, body) {
+  try {
+    await fetch("/api/" + path, { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body) });
+  } catch (e) { showError("No hay conexión con el mezclador."); }
+}
+function showError(msg) {
+  const b = $("#banner");
+  b.textContent = msg || "";
+  b.classList.toggle("show", !!msg);
+}
+
+/* ── Slider propio: vertical u horizontal, con mouse, rueda y teclado ── */
+function slider(el, { min = 0, max = 100, vertical = true, label, onInput, onChange }) {
+  el.className = "sl " + (vertical ? "vert" : "horiz");
+  el.tabIndex = 0;
+  el.setAttribute("role", "slider");
+  el.setAttribute("aria-label", label);
+  el.setAttribute("aria-orientation", vertical ? "vertical" : "horizontal");
+  el.setAttribute("aria-valuemin", min);
+  el.setAttribute("aria-valuemax", max);
+  el.innerHTML = `<div class="trk"><div class="fill"></div></div><div class="knob"></div>`;
+  const trk = el.firstChild, fill = trk.firstChild, knob = el.lastChild;
+  let value = min, active = false;
+  const pct = () => (value - min) / (max - min) * 100;
+  function paint() {
+    if (vertical) { fill.style.height = pct() + "%";
+      knob.style.bottom = `calc(8px + (100% - 16px) * ${pct() / 100})`; }
+    else { fill.style.width = pct() + "%";
+      knob.style.left = `calc(8px + (100% - 16px) * ${pct() / 100})`; }
+    el.setAttribute("aria-valuenow", value);
+  }
+  function set(v, notify) {
+    v = Math.max(min, Math.min(max, Math.round(v)));
+    if (v === value && notify !== "force") return;
+    value = v; paint();
+    if (notify) onInput && onInput(value);
+  }
+  function fromPointer(e) {
+    const r = trk.getBoundingClientRect();
+    const f = vertical ? (r.bottom - e.clientY) / r.height : (e.clientX - r.left) / r.width;
+    set(min + Math.max(0, Math.min(1, f)) * (max - min), true);
+  }
+  el.addEventListener("pointerdown", e => { active = true; dragging++; el.setPointerCapture(e.pointerId);
+    el.focus(); fromPointer(e); });
+  el.addEventListener("pointermove", e => { if (active) fromPointer(e); });
+  const end = () => { if (!active) return; active = false; dragging--; onChange && onChange(value); };
+  el.addEventListener("pointerup", end);
+  el.addEventListener("pointercancel", end);
+  el.addEventListener("wheel", e => { e.preventDefault(); set(value + (e.deltaY < 0 ? 2 : -2), true);
+    onChange && onChange(value); }, { passive: false });
+  el.addEventListener("keydown", e => {
+    const step = { ArrowUp: 1, ArrowRight: 1, ArrowDown: -1, ArrowLeft: -1, PageUp: 10, PageDown: -10 }[e.key];
+    if (step === undefined) return;
+    e.preventDefault(); set(value + step, true); onChange && onChange(value);
+  });
+  return {
+    get value() { return value; },
+    update(v) { if (!active) set(v, false); },
+    setDouble(fn) { el.addEventListener("dblclick", fn); },
+  };
+}
+
+const sliders = {};
+const timers = {};
+function throttle(id, fn) {
+  if (timers[id]) return;
+  fn();
+  timers[id] = setTimeout(() => { timers[id] = null; }, 80);
+}
+
+function build() {
+  const m = $("#mixer");
+  for (const c of COLS) {
+    const col = document.createElement("section");
+    col.className = "col";
+    col.style.setProperty("--c", `var(--${c.id})`);
+    col.dataset.col = c.id;
+    const labels = c.id === "mic" ? SIDE_LABEL_MIC : SIDE_LABEL;
+    col.innerHTML = `
+      <div class="head">${svg(c.id)}<span>${c.name}</span></div>
+      <div class="faders">
+        ${["hp", "st"].map(s => `
+          <div class="fader" data-side="${s}">
+            <svg class="ico" aria-hidden="true"><use href="#i-${s}"/></svg>
+            <span class="lbl">${labels[s]}</span>
+            <div data-sl="${c.id}:${s}"></div>
+            <span class="val">100%</span>
+            <button class="mute" data-chan="${c.id}" data-side="${s}" aria-pressed="false"
+                    title="Silenciar ${labels[s]}">${svg("spk")}</button>
+          </div>`).join("")}
+      </div>
+      <div class="apps-title">${c.id === "master" ? "Sin canal (directo)" : c.id === "mic" ? "Apps que usan el micro" : "Apps"}</div>
+      <div class="apps" data-drop="${ROUTABLE.includes(c.id) ? c.id : ""}"></div>
+      ${c.id === "master" ? `
+        <div class="foot">
+          <label for="out">Salida de audífonos</label>
+          <select id="out"></select>
+        </div>` : ""}
+      ${c.id === "mic" ? `
+        <div class="foot">
+          <label for="micsel">Micrófono</label>
+          <select id="micsel"></select>
+          <span class="lab">Ganancia <span id="gainv" class="val" style="margin-left:auto"></span></span>
+          <div class="cm-row"><div id="gain"></div></div>
+        </div>` : ""}
+      ${ROUTABLE.includes(c.id) ? `
+        <div class="foot">
+          <button class="radio" role="radio" aria-checked="false" data-def="${c.id}"><i></i>Canal para apps nuevas</button>
+        </div>` : ""}`;
+    m.appendChild(col);
+
+    for (const side of ["hp", "st"]) {
+      const holder = col.querySelector(`[data-sl="${c.id}:${side}"]`);
+      const valEl = holder.parentElement.querySelector(".val");
+      sliders[c.id + ":" + side] = slider(holder, {
+        vertical: false, label: `${c.name} ${labels[side]}`,
+        onInput: v => { valEl.textContent = v + "%";
+          throttle(c.id + side, () => post("vol", { chan: c.id, side, value: v })); },
+        onChange: v => post("vol", { chan: c.id, side, value: v }),
+      });
+    }
+  }
+
+  const cm = document.createElement("section");
+  cm.className = "chatmix";
+  cm.style.setProperty("--c", "var(--chat)");
+  cm.innerHTML = `
+    <h3>Balance juego · chat</h3>
+    <div class="cm-row">
+      <svg style="stroke:var(--game)"><use href="#i-game"/></svg>
+      <div id="cm"></div>
+      <svg style="stroke:var(--chat)"><use href="#i-chat"/></svg>
+    </div>
+    <div class="cm-vals"><span id="cmg">Juego 100%</span><span id="cmc">Chat 100%</span></div>`;
+  m.appendChild(cm);
+  const hint = document.createElement("div");
+  hint.className = "hint";
+  hint.innerHTML = `<b>Arrastra</b> una app a otro canal y siempre irá ahí. Doble clic en el balance lo centra. En OBS agrega como audio <b>Monitor of Stream-Mix</b>.`;
+  m.appendChild(hint);
+
+  sliders.cm = slider($("#cm"), { vertical: false, label: "ChatMix",
+    onInput: v => { paintChatmix(v); throttle("cm", () => post("chatmix", { value: v })); },
+    onChange: v => post("chatmix", { value: v }) });
+  $("#cm").classList.add("split");
+  sliders.cm.setDouble(() => { sliders.cm.update(50); paintChatmix(50); post("chatmix", { value: 50 }); });
+
+  const gainCol = $(".col[data-col=mic]");
+  gainCol.querySelector("#gain").parentElement.style.setProperty("--c", "var(--mic)");
+  sliders.gain = slider($("#gain"), { vertical: false, max: 150, label: "Ganancia del micrófono",
+    onInput: v => { $("#gainv").textContent = v + "%"; throttle("g", () => post("micgain", { value: v })); },
+    onChange: v => post("micgain", { value: v }) });
+
+  $("#smode").addEventListener("click", () => {
+    const on = $("#smode").getAttribute("aria-checked") !== "true";
+    paintMode(on);
+    post("streammode", { value: on });
+  });
+
+  m.querySelectorAll("button.mute").forEach(b => b.addEventListener("click", () => {
+    const on = b.getAttribute("aria-pressed") !== "true";
+    setMuteBtn(b, on);
+    post("mute", { chan: b.dataset.chan, side: b.dataset.side, value: on });
+  }));
+  $("#out").addEventListener("change", e => post("output", { name: e.target.value }));
+  $("#micsel").addEventListener("change", e => post("mic", { name: e.target.value }));
+  m.querySelectorAll("[data-def]").forEach(r => r.addEventListener("click", () => {
+    m.querySelectorAll("[data-def]").forEach(x => x.setAttribute("aria-checked", x === r));
+    post("default", { chan: r.dataset.def });
+  }));
+
+  m.querySelectorAll(".apps").forEach(zone => {
+    if (!zone.dataset.drop) return;
+    zone.addEventListener("dragover", e => { e.preventDefault(); zone.classList.add("over"); });
+    zone.addEventListener("dragleave", () => zone.classList.remove("over"));
+    zone.addEventListener("drop", e => {
+      e.preventDefault(); zone.classList.remove("over");
+      const key = e.dataTransfer.getData("text/plain");
+      if (key) { post("route", { key, chan: zone.dataset.drop }); setTimeout(refresh, 300); }
+    });
+  });
+}
+
+function paintMode(on) {
+  $("#smode").setAttribute("aria-checked", on ? "true" : "false");
+  $("#smodel").textContent = on ? "Modo stream" : "Modo normal";
+  document.body.classList.toggle("normal", !on);
+}
+function paintChatmix(v) {
+  $("#cmg").textContent = `Juego ${v <= 50 ? 100 : Math.round((100 - v) * 2)}%`;
+  $("#cmc").textContent = `Chat ${v >= 50 ? 100 : Math.round(v * 2)}%`;
+}
+function setMuteBtn(b, on) {
+  b.setAttribute("aria-pressed", on ? "true" : "false");
+  b.classList.toggle("on", on);
+  b.innerHTML = svg(on ? "off" : "spk");
+  b.closest(".fader").classList.toggle("muted", on);
+}
+function fillSelect(sel, items, value) {
+  let list = items.slice();
+  if (value && !list.some(i => i.name === value)) list.unshift({ name: value, desc: "(no conectado)" });
+  const html = list.map(i => `<option value="${esc(i.name)}">${esc(i.desc)}</option>`).join("");
+  if (sel.dataset.html !== html) { sel.innerHTML = html; sel.dataset.html = html; }
+  if (document.activeElement !== sel) sel.value = value || "";
+}
+
+function render() {
+  const cfg = S.cfg;
+  showError(S.error);
+  paintMode(!!cfg.stream_mode);
+  $("#demo").textContent = S.demo ? "Modo demo — no se está tocando el audio" : "";
+  for (const c of COLS) for (const side of ["hp", "st"]) {
+    const v = cfg.vol[c.id][side];
+    sliders[c.id + ":" + side].update(v);
+    const holder = $(`[data-sl="${c.id}:${side}"]`);
+    if (!holder.matches(":active")) holder.parentElement.querySelector(".val").textContent = sliders[c.id + ":" + side].value + "%";
+  }
+  document.querySelectorAll("button.mute").forEach(b =>
+    setMuteBtn(b, !!cfg.mute[b.dataset.chan][b.dataset.side]));
+  sliders.cm.update(cfg.chatmix); paintChatmix(sliders.cm.value);
+  sliders.gain.update(cfg.mic_gain); $("#gainv").textContent = sliders.gain.value + "%";
+  fillSelect($("#out"), S.outputs, cfg.output);
+  fillSelect($("#micsel"), S.mics, cfg.mic);
+  document.querySelectorAll("[data-def]").forEach(r => r.setAttribute("aria-checked", r.dataset.def === cfg.default_channel));
+
+  for (const c of COLS) {
+    const zone = document.querySelector(`.col[data-col=${c.id}] .apps`);
+    const list = S.apps[c.id] || [];
+    const html = list.length
+      ? list.map(a => `<span class="tag ${c.id === "mic" ? "static" : ""}" draggable="${c.id !== "mic"}"
+           data-key="${esc(a.key)}" title="${esc(a.name)}">${svg(c.id === "mic" ? "mic" : "hp")}${esc(a.name)}</span>`).join("")
+      : `<span class="empty">${ROUTABLE.includes(c.id) ? "Arrastra apps aquí" : "—"}</span>`;
+    if (zone.dataset.html !== html) {
+      zone.innerHTML = html; zone.dataset.html = html;
+      zone.querySelectorAll(".tag[draggable=true]").forEach(t =>
+        t.addEventListener("dragstart", e => e.dataTransfer.setData("text/plain", t.dataset.key)));
+    }
+  }
+}
+
+async function refresh() {
+  if (dragging > 0) return;
+  try {
+    const r = await fetch("/api/state", { cache: "no-store" });
+    S = await r.json();
+    render();
+  } catch (e) {
+    showError("Conectando con el mezclador…");
+  }
+}
+
+build();
+refresh();
+setInterval(refresh, 1200);
+</script>
+</body>
+</html>
